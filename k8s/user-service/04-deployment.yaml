@@ -1,0 +1,208 @@
+# user-service Deployment for AWS EKS
+#
+# Before applying, replace:
+#   <AWS_ACCOUNT_ID>  → your 12-digit AWS account ID
+#   <AWS_REGION>      → e.g. ap-southeast-1
+#   <IMAGE_TAG>       → e.g. 1.0.0 or the git SHA (never use 'latest' in production)
+#
+# Build and push the image to ECR:
+#   aws ecr get-login-password --region <AWS_REGION> | \
+#     docker login --username AWS --password-stdin <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com
+#   docker build -t user-service ./user-service
+#   docker tag user-service:latest <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/user-service:<IMAGE_TAG>
+#   docker push <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/user-service:<IMAGE_TAG>
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-service
+  namespace: saga
+  labels:
+    app: user-service
+    version: "1.0.0"
+    app.kubernetes.io/part-of: saga-platform
+    app.kubernetes.io/component: microservice
+spec:
+  # Start with 2 replicas so there is no single point of failure from day one.
+  # The HPA (06-hpa.yaml) will scale this up/down based on CPU.
+  replicas: 2
+
+  selector:
+    matchLabels:
+      app: user-service
+
+  # RollingUpdate ensures zero-downtime deploys:
+  #   maxSurge: 1   → spin up 1 extra pod before terminating old ones
+  #   maxUnavailable: 0 → never reduce below the desired replica count during rollout
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+
+  template:
+    metadata:
+      labels:
+        app: user-service
+        version: "1.0.0"
+      annotations:
+        # Force a pod restart when ConfigMap or Secret changes (used with config reload tools)
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8083"
+
+    spec:
+      serviceAccountName: user-service
+
+      # Graceful shutdown: give Spring Boot 60s to finish in-flight requests
+      terminationGracePeriodSeconds: 60
+
+      # Spread pods across Availability Zones for HA.
+      # EKS nodes are labeled with topology.kubernetes.io/zone automatically.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: DoNotSchedule
+          labelSelector:
+            matchLabels:
+              app: user-service
+
+      # Security context: run as non-root user inside the container
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: user-service
+          # Replace with your actual ECR image URI and tag
+          image: <AWS_ACCOUNT_ID>.dkr.ecr.<AWS_REGION>.amazonaws.com/user-service:<IMAGE_TAG>
+
+          # Always pull ensures fresh images on every pod start.
+          # Use IfNotPresent in dev to avoid repeated pulls.
+          imagePullPolicy: Always
+
+          ports:
+            - name: http
+              containerPort: 8083
+              protocol: TCP
+
+          # ------------------------------------------------------------------
+          # Environment — non-sensitive values from ConfigMap
+          # ------------------------------------------------------------------
+          envFrom:
+            - configMapRef:
+                name: user-service-config
+            - secretRef:
+                name: user-service-secret
+
+          # JAVA_OPTS injected separately so the entrypoint can pick it up
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              valueFrom:
+                configMapKeyRef:
+                  name: user-service-config
+                  key: JAVA_OPTS
+
+            # Expose pod name and namespace to the app (useful for logging/tracing)
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+
+          # ------------------------------------------------------------------
+          # Resource requests and limits
+          # Requests → what the scheduler guarantees (QoS: Burstable).
+          # Limits   → hard ceiling; OOMKilled if exceeded.
+          # Tune based on actual load testing.
+          # ------------------------------------------------------------------
+          resources:
+            requests:
+              cpu: "250m"       # 0.25 vCPU guaranteed
+              memory: "512Mi"   # 512 MB guaranteed
+            limits:
+              cpu: "1000m"      # 1 vCPU burst ceiling
+              memory: "1Gi"     # 1 GB hard limit
+
+          # ------------------------------------------------------------------
+          # Probes — all hit Spring Boot Actuator endpoints
+          #
+          # startupProbe:   Gives the JVM + Config Server fetch time to complete.
+          #                 Disables liveness/readiness until Spring is fully up.
+          #                 Allows up to 90s (18 failures × 5s period) before killing.
+          #
+          # livenessProbe:  Kills and restarts the pod if Spring is deadlocked/OOM.
+          #                 Only runs AFTER startupProbe succeeds.
+          #
+          # readinessProbe: Removes the pod from the Service endpoints if it's not
+          #                 ready to accept traffic (e.g. DB unreachable, Kafka down).
+          # ------------------------------------------------------------------
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            failureThreshold: 18    # 18 × 5s = 90s max startup time
+            periodSeconds: 5
+
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8083
+            initialDelaySeconds: 0  # startupProbe handles the initial wait
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8083
+            initialDelaySeconds: 0
+            periodSeconds: 10
+            failureThreshold: 3
+            timeoutSeconds: 5
+
+          # ------------------------------------------------------------------
+          # Lifecycle hooks
+          # preStop sleep: gives the load balancer time to de-register this pod
+          # before Spring Boot starts shutting down connections.
+          # Without this, in-flight requests arrive at a pod already stopping.
+          # ------------------------------------------------------------------
+          lifecycle:
+            preStop:
+              exec:
+                command: ["sh", "-c", "sleep 10"]
+
+          # Read-only root filesystem — hardens the container against writes
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+
+          # Writable temp dir needed by the JVM (for class data sharing, tmp files)
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      # Ensure pods are not scheduled on nodes tainted as spot-only
+      # unless you explicitly want spot instances for this service.
+      # Remove this block if you are using only On-Demand nodes.
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: eks.amazonaws.com/capacityType
+                    operator: In
+                    values:
+                      - ON_DEMAND

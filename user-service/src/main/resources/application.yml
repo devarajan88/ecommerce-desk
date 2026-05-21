@@ -1,0 +1,143 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: user-service
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      properties:
+        delivery.timeout.ms: 120000
+        linger.ms: 0
+        request.timeout.ms: 30000
+        max.in.flight.requests.per.connection: 5
+        enable.idempotence: true
+    consumer:
+      group-id: user-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  cache:
+    type: redis
+
+  session:
+    store-type: redis
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/niruthendb
+    username: root
+    password: admin123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  sql:
+    init:
+      mode: never
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+# Eureka — aligns with orders-service pattern
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Trusted Header Security — headers injected by the API Gateway after JWT validation
+# Downstream services DO NOT validate JWT themselves; Gateway is the single entry point
+gateway:
+  trusted:
+    header:
+      username: X-User-Name
+      roles: X-User-Roles
+
+# Keycloak Admin API — used for user registration (KeycloakAdminService)
+# Keycloak OAuth2 client — used by AuthController to proxy password-grant logins
+keycloak:
+  admin:
+    server-url: http://keycloak:8080
+    realm: saga-realm
+    client-id: admin-cli
+    username: admin
+    password: admin
+  client:
+    id: frontend-client
+    secret: ${KEYCLOAK_CLIENT_SECRET:change-me-in-docker-compose}
+  issuer-uri: http://keycloak:8080/realms/saga-realm
+
+# Resilience4J Circuit Breaker (mirrors orders-service)
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 2s
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 3s
+
+# Actuator / Prometheus / Zipkin (mirrors orders-service)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://localhost:9411/api/v2/spans
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.cache: TRACE
+    org.springframework.data.redis.cache: TRACE

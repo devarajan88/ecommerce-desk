@@ -1,0 +1,57 @@
+# Non-sensitive configuration. All sensitive values (passwords, secrets) live in 03-secret.yaml.
+#
+# AWS service endpoints to replace before applying:
+#   SPRING_DATASOURCE_URL  → your RDS Aurora MySQL endpoint
+#   SPRING_KAFKA_BOOTSTRAP_SERVERS → your MSK cluster bootstrap brokers
+#   SPRING_DATA_REDIS_HOST → your ElastiCache Redis primary endpoint
+#   MANAGEMENT_ZIPKIN_TRACING_ENDPOINT → Zipkin/X-Ray collector URL
+#   KEYCLOAK_ISSUER_URI    → your Keycloak or Cognito issuer URL
+#
+# Internal K8s service names use the pattern:
+#   <service-name>.<namespace>.svc.cluster.local
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: user-service-config
+  namespace: saga
+  labels:
+    app: user-service
+    app.kubernetes.io/part-of: saga-platform
+data:
+  # Spring profile — activates application-prod.properties from config-server
+  SPRING_PROFILES_ACTIVE: "prod"
+
+  # Config Server — running as a K8s service in the same namespace
+  CONFIG_SERVER_URL: "http://config-server.saga.svc.cluster.local:8888"
+
+  # Eureka — running as a K8s service in the same namespace
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://eureka-server.saga.svc.cluster.local:8761/eureka/"
+
+  # MySQL — replace with your RDS Aurora endpoint
+  # Format: jdbc:mysql://<rds-endpoint>:3306/<db-name>
+  SPRING_DATASOURCE_URL: "jdbc:mysql://<RDS_ENDPOINT>:3306/niruthendb?useSSL=true&requireSSL=true&serverTimezone=UTC"
+  SPRING_DATASOURCE_USERNAME: "root"
+
+  # Kafka — replace with your MSK bootstrap brokers (comma-separated)
+  # Format: b-1.<cluster>.<id>.<region>.kafka.amazonaws.com:9092,...
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: "<MSK_BOOTSTRAP_BROKERS>"
+
+  # Redis — replace with your ElastiCache primary endpoint (no port in the host property)
+  SPRING_DATA_REDIS_HOST: "<ELASTICACHE_REDIS_HOST>"
+  SPRING_DATA_REDIS_PORT: "6379"
+
+  # Distributed tracing — replace with your Zipkin or AWS X-Ray collector
+  MANAGEMENT_ZIPKIN_TRACING_ENDPOINT: "http://zipkin.saga.svc.cluster.local:9411/api/v2/spans"
+
+  # Keycloak — replace with your realm's issuer URI
+  SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: "http://keycloak.saga.svc.cluster.local:8080/realms/saga-realm"
+  KEYCLOAK_ISSUER_URI: "http://keycloak.saga.svc.cluster.local:8080/realms/saga-realm"
+
+  # Keycloak admin API (used by KeycloakAdminService to provision users)
+  KEYCLOAK_ADMIN_SERVER_URL: "http://keycloak.saga.svc.cluster.local:8080"
+  KEYCLOAK_ADMIN_REALM: "saga-realm"
+  KEYCLOAK_ADMIN_CLIENT_ID: "admin-cli"
+  KEYCLOAK_ADMIN_USERNAME: "admin"
+
+  # JVM tuning for containers — keeps heap within pod memory limits
+  JAVA_OPTS: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -XX:InitialRAMPercentage=50.0 -Djava.security.egd=file:/dev/./urandom"

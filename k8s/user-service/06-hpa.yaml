@@ -1,0 +1,56 @@
+# HorizontalPodAutoscaler — scales user-service pods based on CPU utilization.
+#
+# Requires metrics-server to be installed on the cluster:
+#   kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+#
+# Scaling behavior:
+#   Scale up:   If avg CPU > 70% for 30s → add pods (fast, 1 pod per 15s)
+#   Scale down: Gradual — 1 pod removed per 60s (prevents flapping)
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: user-service-hpa
+  namespace: saga
+  labels:
+    app: user-service
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: user-service
+
+  minReplicas: 2   # always 2 replicas minimum — matches PDB minAvailable
+  maxReplicas: 10  # EKS Cluster Autoscaler will add nodes if needed
+
+  metrics:
+    # Primary signal: CPU — scales up when average pod CPU exceeds 70%
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+
+    # Secondary signal: memory — scales up when average memory exceeds 80%
+    # Useful when user-service handles large payload processing
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 30   # wait 30s of sustained load before scaling up
+      policies:
+        - type: Pods
+          value: 2                      # add at most 2 pods per scaling event
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300  # wait 5 minutes before scaling down (prevents flapping)
+      policies:
+        - type: Pods
+          value: 1                      # remove at most 1 pod per 60s
+          periodSeconds: 60

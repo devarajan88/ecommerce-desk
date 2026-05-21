@@ -1,0 +1,27 @@
+# ClusterIP Service — user-service is an internal microservice.
+# External traffic reaches it only via the API Gateway (which has its own
+# LoadBalancer or Ingress). Never expose this directly with type: LoadBalancer.
+#
+# DNS name inside the cluster: user-service.saga.svc.cluster.local:8083
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-service
+  namespace: saga
+  labels:
+    app: user-service
+    app.kubernetes.io/part-of: saga-platform
+  annotations:
+    # Prometheus service discovery — scrape this service via ServiceMonitor (if using kube-prometheus-stack)
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8083"
+spec:
+  type: ClusterIP
+  selector:
+    app: user-service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8083        # port other services call
+      targetPort: http  # maps to containerPort named 'http' in the Deployment

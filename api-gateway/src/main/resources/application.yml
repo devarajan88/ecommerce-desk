@@ -1,0 +1,127 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Fix #2: injected at deploy time so issuer validation works in every environment.
+          # Docker: JWT_ISSUER_URI=http://keycloak:8080/realms/saga-realm (set in docker-compose)
+          # Production: JWT_ISSUER_URI=https://auth.yourdomain.com/realms/saga-realm
+          issuer-uri: ${JWT_ISSUER_URI:http://keycloak:8080/realms/saga-realm}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://keycloak:8080/realms/saga-realm/protocol/openid-connect/certs}
+  cloud:
+    gateway:
+      httpclient:
+        connect-timeout: 2000
+        response-timeout: 5s
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      routes:
+        - id: user_service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/**,/api/roles/**
+          filters:
+            - name: CircuitBreaker       # Fix #6
+              args:
+                name: userServiceCB
+                fallbackUri: forward:/fallback
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+        - id: auth_service
+          uri: lb://user-service
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - name: CircuitBreaker       # Fix #6
+              args:
+                name: authServiceCB
+                fallbackUri: forward:/fallback
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+        - id: orders_service
+          uri: lb://orders-service
+          predicates:
+            - Path=/orders/**
+          filters:
+            - name: CircuitBreaker       # Fix #6
+              args:
+                name: ordersServiceCB
+                fallbackUri: forward:/fallback
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+        - id: products_service
+          uri: lb://products-service
+          predicates:
+            - Path=/api/products/**
+          filters:
+            - name: CircuitBreaker       # Fix #6
+              args:
+                name: productsServiceCB
+                fallbackUri: forward:/fallback
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+        - id: payments_service
+          uri: lb://payments-service
+          predicates:
+            - Path=/payments/**
+          filters:
+            - name: CircuitBreaker       # Fix #6
+              args:
+                name: paymentsServiceCB
+                fallbackUri: forward:/fallback
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 5
+                redis-rate-limiter.burstCapacity: 10
+                redis-rate-limiter.requestedTokens: 1
+                key-resolver: "#{@userKeyResolver}"
+
+      loadbalancer:
+        use404: true
+      # Fix #3: globalcors wildcard removed — CORS is handled in SecurityConfig.java
+      # with an explicit allow-list read from gateway.cors.allowed-origins in config-repo.
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+  instance:
+    prefer-ip-address: true
+
+logging:
+  level:
+    org.springframework.security: DEBUG
+    org.springframework.cloud.gateway: INFO
+    org.springframework.web: INFO
+    niruthen.api_gateway: DEBUG

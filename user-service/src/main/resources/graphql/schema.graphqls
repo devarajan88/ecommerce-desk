@@ -1,0 +1,48 @@
+type Query {
+    users(page: Int, size: Int): UserPage!
+    user(id: ID!): User
+}
+
+type Mutation {
+    createUser(input: UserInput!): User!
+    updateUser(id: ID!, input: UserInput!): User!
+    deleteUser(id: ID!): Boolean!
+}
+
+type User {
+    id: ID
+    name: String
+    age: Int
+    emailId: String
+    department: String
+    role: String
+    status: String
+    baseLocation: String
+    address: Address
+}
+
+type Address {
+    id: ID
+    no: String
+    street: String
+    area: String
+    city: String
+    zip: String
+    country: String
+}
+
+type UserPage {
+    content: [User!]!
+    totalElements: Int!
+    totalPages: Int!
+}
+
+input UserInput {
+    name: String!
+    age: Int!
+    emailId: String!
+    department: String
+    role: String
+    baseLocation: String
+    password: String
+}

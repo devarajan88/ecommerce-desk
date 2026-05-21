@@ -1,0 +1,22 @@
+# PodDisruptionBudget — ensures at least 1 pod is always running during
+# voluntary disruptions (node drains, rolling upgrades, AZ maintenance).
+#
+# Without this, a kubectl drain can evict ALL pods at once, causing downtime.
+#
+# Rule: during any disruption, at most 1 pod can be unavailable at a time.
+# With minReplicas=2, this means 1 pod is always healthy and serving traffic.
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: user-service-pdb
+  namespace: saga
+  labels:
+    app: user-service
+    app.kubernetes.io/part-of: saga-platform
+spec:
+  # minAvailable: 1 → Kubernetes will not evict a pod if doing so would leave
+  # fewer than 1 running pod. Expressed as integer or percentage ("50%").
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: user-service
