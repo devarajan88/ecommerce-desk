@@ -1,23 +1,23 @@
 package com.appsdeveloperblog.payments.dao.jpa.entity;
 
-import jakarta.persistence.*;
+import org.springframework.data.annotation.Id;
+import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.math.BigDecimal;
 import java.util.UUID;
 
-@Table(name = "payments")
-@Entity
+@Document(collection = "payments")
 public class PaymentEntity {
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-    @Column(name = "order_id")
+    @Field("order_id")
     private UUID orderId;
-    @Column(name = "product_id")
+    @Field("product_id")
     private UUID productId;
-    @Column(name = "product_price")
+    @Field("product_price")
     private BigDecimal productPrice;
-    @Column(name = "product_quantity")
+    @Field("product_quantity")
     private Integer productQuantity;
 
     public UUID getId() {

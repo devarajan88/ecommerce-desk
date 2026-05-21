@@ -59,4 +59,20 @@ public class ProductServiceImpl implements ProductService {
                 .map(entity -> new Product(entity.getId(), entity.getName(), entity.getPrice(), entity.getQuantity()))
                 .collect(Collectors.toList());
     }
+
+    @Override
+    public Product update(UUID id, Product product) {
+        ProductEntity productEntity = productRepository.findById(id).orElseThrow();
+        productEntity.setName(product.getName());
+        productEntity.setPrice(product.getPrice());
+        productEntity.setQuantity(product.getQuantity());
+        productRepository.save(productEntity);
+        return new Product(productEntity.getId(), product.getName(), product.getPrice(), product.getQuantity());
+    }
+
+    @Override
+    public void delete(UUID id) {
+        productRepository.deleteById(id);
+    }
 }
+

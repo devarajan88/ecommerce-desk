@@ -3,6 +3,7 @@ package com.appsdeveloperblog.orders.service;
 import com.appsdeveloperblog.core.dto.Order;
 import com.appsdeveloperblog.core.dto.events.OrderApprovedEvent;
 import com.appsdeveloperblog.core.dto.events.OrderCreatedEvent;
+import com.appsdeveloperblog.core.dto.events.OrderRejectedEvent;
 import com.appsdeveloperblog.core.types.OrderStatus;
 import com.appsdeveloperblog.orders.dao.jpa.entity.OrderEntity;
 import com.appsdeveloperblog.orders.dao.jpa.repository.OrderRepository;
@@ -58,8 +59,41 @@ public class OrderServiceImpl implements OrderService {
         Assert.notNull(orderEntity, "No order is found with id " + orderId + " in the database table");
         orderEntity.setStatus(OrderStatus.APPROVED);
         orderRepository.save(orderEntity);
-        OrderApprovedEvent orderApprovedEvent = new OrderApprovedEvent(orderId);
-        kafkaTemplate.send(ordersEventsTopicName, orderApprovedEvent);
+        kafkaTemplate.send(ordersEventsTopicName, new OrderApprovedEvent(orderId));
+    }
+
+    @Override
+    public void rejectOrder(UUID orderId) {
+        OrderEntity orderEntity = orderRepository.findById(orderId).orElse(null);
+        Assert.notNull(orderEntity, "No order is found with id " + orderId + " in the database table");
+        orderEntity.setStatus(OrderStatus.REJECTED);
+        orderRepository.save(orderEntity);
+        kafkaTemplate.send(ordersEventsTopicName, new OrderRejectedEvent(orderId));
+    }
+
+    @Override
+    public java.util.List<Order> findAllOrders() {
+        return orderRepository.findAll().stream().map(entity -> new Order(
+                entity.getId(),
+                entity.getCustomerId(),
+                entity.getProductId(),
+                entity.getProductQuantity(),
+                entity.getStatus()
+        )).collect(java.util.stream.Collectors.toList());
+    }
+
+    @Override
+    public Order updateOrderStatus(UUID orderId, OrderStatus status) {
+        OrderEntity entity = orderRepository.findById(orderId).orElse(null);
+        Assert.notNull(entity, "No order found with id " + orderId);
+        entity.setStatus(status);
+        orderRepository.save(entity);
+        return new Order(entity.getId(), entity.getCustomerId(), entity.getProductId(), entity.getProductQuantity(), entity.getStatus());
+    }
+
+    @Override
+    public void deleteOrder(UUID orderId) {
+        orderRepository.deleteById(orderId);
     }
 
 }

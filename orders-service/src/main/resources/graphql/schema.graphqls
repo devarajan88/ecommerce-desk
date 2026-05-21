@@ -1,0 +1,45 @@
+type Query {
+    orders: [Order!]!
+    orderHistory(orderId: ID!): [OrderHistory!]!
+}
+
+type Mutation {
+    placeOrder(input: CreateOrderInput!): CreateOrderResponse!
+    updateOrderStatus(orderId: ID!, status: OrderStatus!): Order!
+    deleteOrder(orderId: ID!): Boolean!
+}
+
+type Order {
+    orderId: ID
+    customerId: ID
+    productId: ID
+    productQuantity: Int
+    status: OrderStatus
+}
+
+type CreateOrderResponse {
+    orderId: ID
+    customerId: ID
+    productId: ID
+    productQuantity: Int
+    status: OrderStatus
+}
+
+type OrderHistory {
+    id: ID
+    orderId: ID
+    status: OrderStatus
+    createdAt: String
+}
+
+input CreateOrderInput {
+    customerId: ID!
+    productId: ID!
+    productQuantity: Int!
+}
+
+enum OrderStatus {
+    CREATED
+    APPROVED
+    REJECTED
+}

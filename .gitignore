@@ -79,3 +79,29 @@ nb-configuration.xml
 ## Miscellaneous
 ##############################
 *.log
+
+##############################
+## Services excluded from VCS
+##############################
+api-gateway/
+config-server/
+eureka-server/
+user-service/
+
+##############################
+## Infrastructure / K8s
+##############################
+k8s/
+
+##############################
+## Markdown documentation
+##############################
+*.md
+*.MD
+
+##############################
+## SonarQube
+##############################
+sonar-project.properties
+sonar-scan.bat
+sonar-scan.sh

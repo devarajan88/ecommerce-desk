@@ -10,9 +10,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
-@RequestMapping("/products")
+@RequestMapping("/api/products")
 public class ProductsController {
     private final ProductService productService;
 
@@ -37,4 +38,24 @@ public class ProductsController {
         BeanUtils.copyProperties(result, productCreationResponse);
         return productCreationResponse;
     }
+
+    @GetMapping("/{id}")
+    public Product findById(@PathVariable UUID id) {
+        return productService.findAll().stream()
+                .filter(p -> p.getId().equals(id))
+                .findFirst()
+                .orElseThrow();
+    }
+
+    @PutMapping("/{id}")
+    public Product update(@PathVariable UUID id, @RequestBody Product product) {
+        return productService.update(id, product);
+    }
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void delete(@PathVariable UUID id) {
+        productService.delete(id);
+    }
 }
+

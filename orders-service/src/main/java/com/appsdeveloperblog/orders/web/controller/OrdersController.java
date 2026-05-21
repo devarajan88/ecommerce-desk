@@ -13,12 +13,18 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/orders")
 public class OrdersController {
     private final OrderService orderService;
     private final OrderHistoryService orderHistoryService;
+
+    @GetMapping("/ping")
+    public String ping() {
+        return "pong";
+    }
 
 
     public OrdersController(OrderService orderService, OrderHistoryService orderHistoryService) {
@@ -45,6 +51,24 @@ public class OrdersController {
             OrderHistoryResponse orderHistoryResponse = new OrderHistoryResponse();
             BeanUtils.copyProperties(orderHistory, orderHistoryResponse);
             return orderHistoryResponse;
-        }).toList();
+        }).collect(Collectors.toList());
+    }
+
+    @GetMapping
+    @ResponseStatus(HttpStatus.OK)
+    public List<Order> findAllOrders() {
+        return orderService.findAllOrders();
+    }
+
+    @PutMapping("/{orderId}/status")
+    @ResponseStatus(HttpStatus.OK)
+    public Order updateOrderStatus(@PathVariable UUID orderId, @RequestParam com.appsdeveloperblog.core.types.OrderStatus status) {
+        return orderService.updateOrderStatus(orderId, status);
+    }
+
+    @DeleteMapping("/{orderId}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteOrder(@PathVariable UUID orderId) {
+        orderService.deleteOrder(orderId);
     }
 }

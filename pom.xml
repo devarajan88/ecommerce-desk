@@ -3,10 +3,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.appsdeveloperblog</groupId>
-    <artifactId>saga-pattern-spring-boot-demo</artifactId>
+    <artifactId>ecommerce-desk</artifactId>
     <packaging>pom</packaging>
-    <name>Saga Orchestration Pattern Demo</name>
-    <description>Saga Orchestration Pattern Spring Boot Demo</description>
+    <name>ecommerce-desk</name>
+    <description>ecommerce-desk Spring Boot Demo</description>
     <version>${revision}</version>
 
     <parent>
@@ -17,20 +17,54 @@
     </parent>
 
     <modules>
+        <module>config-server</module>
+        <module>api-gateway</module>
+        <module>eureka-server</module>
         <module>orders-service</module>
         <module>products-service</module>
         <module>payments-service</module>
         <module>credit-card-processor-service</module>
+        <module>user-service</module>
     </modules>
 
     <properties>
         <core.version>1.0.0</core.version>
         <revision>1.0.0</revision>
         <java.version>17</java.version>
+        <spring-cloud.version>2023.0.1</spring-cloud.version>
+
+        <!-- JaCoCo code coverage -->
+        <jacoco.version>0.8.12</jacoco.version>
+
+        <!-- SonarQube analysis — override sonar.token at runtime:
+             mvn sonar:sonar -Dsonar.token=<your-token>            -->
+        <sonar.host.url>http://localhost:9000</sonar.host.url>
+        <sonar.java.coveragePlugin>jacoco</sonar.java.coveragePlugin>
+        <sonar.dynamicAnalysis>reuseReports</sonar.dynamicAnalysis>
+        <sonar.coverage.jacoco.xmlReportPaths>
+            ${project.build.directory}/site/jacoco/jacoco.xml
+        </sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.language>java</sonar.language>
+        <sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+        <sonar.exclusions>
+            **/generated-sources/**,
+            **/*Application.java,
+            **/config/**,
+            **/model/**,
+            **/entity/**,
+            **/dto/**
+        </sonar.exclusions>
     </properties>
 
     <dependencyManagement>
         <dependencies>
+            <dependency>
+                <groupId>org.springframework.cloud</groupId>
+                <artifactId>spring-cloud-dependencies</artifactId>
+                <version>${spring-cloud.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
             <dependency>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-starter-web</artifactId>
@@ -50,11 +84,28 @@
         </dependencies>
     </dependencyManagement>
     <build>
+        <pluginManagement>
+            <plugins>
+                <!-- Sonar Maven plugin — version-managed here, invoked via mvn sonar:sonar -->
+                <plugin>
+                    <groupId>org.sonarsource.scanner.maven</groupId>
+                    <artifactId>sonar-maven-plugin</artifactId>
+                    <version>3.11.0.3922</version>
+                </plugin>
+                <!-- JaCoCo version management for all child modules -->
+                <plugin>
+                    <groupId>org.jacoco</groupId>
+                    <artifactId>jacoco-maven-plugin</artifactId>
+                    <version>${jacoco.version}</version>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+
         <plugins>
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>flatten-maven-plugin</artifactId>
-                <version>1.6.0</version>  <!-- Add this line -->
+                <version>1.6.0</version>
                 <configuration>
                     <updatePomFile>true</updatePomFile>
                     <flattenMode>resolveCiFriendliesOnly</flattenMode>
@@ -72,6 +123,29 @@
                         <phase>clean</phase>
                         <goals>
                             <goal>clean</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- JaCoCo: instrument tests for coverage and generate XML report for Sonar -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <executions>
+                    <!-- Attach JaCoCo agent before unit tests run -->
+                    <execution>
+                        <id>jacoco-prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <!-- Generate XML + HTML report after unit tests -->
+                    <execution>
+                        <id>jacoco-report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
                         </goals>
                     </execution>
                 </executions>

@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.List;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -29,7 +30,8 @@ public class PaymentServiceImpl implements PaymentService {
                 .multiply(new BigDecimal(payment.getProductQuantity()));
         ccpRemoteService.process(new BigInteger(SAMPLE_CREDIT_CARD_NUMBER), totalPrice);
         PaymentEntity paymentEntity = new PaymentEntity();
-        BeanUtils.copyProperties(payment, paymentEntity);
+        paymentEntity.setId(UUID.randomUUID());
+        BeanUtils.copyProperties(payment, paymentEntity, "id");
         paymentRepository.save(paymentEntity);
 
         var processedPayment = new Payment();
